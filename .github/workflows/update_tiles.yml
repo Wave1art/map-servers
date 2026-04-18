@@ -1,0 +1,77 @@
+name: Update Tiles
+
+on:
+  # ── Scheduled run — fires daily, builds every layer ──────────────────────
+  schedule:
+    - cron: '15 7 * * *'   # 07:15 UTC — after SLF publishes at 06:00 UTC
+
+  # ── Manual trigger — "Run workflow" button in GitHub Actions UI ───────────
+  workflow_dispatch:
+    inputs:
+      layer_id:
+        description: >
+          Layer ID to build (leave blank for all layers).
+          See layers.yml for IDs, e.g. slf-snow-depth, slope-30
+        required: false
+        default: ''
+      max_zoom:
+        description: 'Max zoom override (blank = use layers.yml value)'
+        required: false
+        default: ''
+      also_mbtiles:
+        description: 'Also generate .mbtiles for mobile import? (true/false)'
+        required: false
+        default: 'false'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build tiles
+        run: |
+          ARGS=""
+          [ -n "${{ github.event.inputs.layer_id }}"   ] && ARGS="$ARGS --layer ${{ github.event.inputs.layer_id }}"
+          [ -n "${{ github.event.inputs.max_zoom }}"   ] && ARGS="$ARGS --max-zoom ${{ github.event.inputs.max_zoom }}"
+          [ "${{ github.event.inputs.also_mbtiles }}" = "true" ] && ARGS="$ARGS --also-mbtiles"
+          python build_tiles.py $ARGS
+
+      - name: Upload .mbtiles as workflow artifact (if generated)
+        if: github.event.inputs.also_mbtiles == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mbtiles
+          path: docs/tiles/*.mbtiles
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Commit and push updated tiles
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add docs/
+          if git diff --staged --quiet; then
+            echo "No changes — tiles are already up to date."
+          else
+            DATE=$(date -u +%Y-%m-%d)
+            LAYER="${{ github.event.inputs.layer_id }}"
+            MSG="${LAYER:-all layers}: update tiles ${DATE}"
+            git commit -m "$MSG"
+            git push
+          fi

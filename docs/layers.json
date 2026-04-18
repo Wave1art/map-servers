@@ -1,0 +1,47 @@
+{
+  "layers": [
+    {
+      "id": "slf-snow-depth",
+      "name": "Snow Depth (HS 1-day)",
+      "description": "SLF daily gridded snow depth model (HS1D-v2). Updated at 06:00 UTC. Colour-coded by depth class; semi-transparent areas indicate partial cover.\n",
+      "tileUrl": "tiles/slf-snow-depth/{z}/{x}/{y}.png",
+      "attribution": "\u00a9 WSL Institute for Snow and Avalanche Research SLF (www.slf.ch)",
+      "legend": [
+        {
+          "label": "1\u201320 cm",
+          "color": "#CDFFCD"
+        },
+        {
+          "label": "20\u201350 cm",
+          "color": "#99F0B2"
+        },
+        {
+          "label": "50\u201380 cm",
+          "color": "#53BD9F"
+        },
+        {
+          "label": "80\u2013120 cm",
+          "color": "#3296B4"
+        },
+        {
+          "label": "120\u2013200 cm",
+          "color": "#0670B0"
+        },
+        {
+          "label": "200\u2013300 cm",
+          "color": "#054F8C"
+        },
+        {
+          "label": "> 300 cm",
+          "color": "#610432"
+        }
+      ],
+      "zoom": {
+        "min": 5,
+        "max": 10
+      },
+      "validAt": "2026-04-18T06:00:00Z",
+      "builtAt": "2026-04-18T19:14:08.446584+00:00"
+    }
+  ]
+}

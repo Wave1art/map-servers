@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snow & Terrain Tiles</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #111827;
+      color: #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    #header {
+      flex-shrink: 0;
+      background: #1f2937;
+      border-bottom: 1px solid #374151;
+      padding: 0 16px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    #header h1 { font-size: 0.95rem; font-weight: 600; white-space: nowrap; }
+
+    /* ── Layer pills ── */
+    #layer-tabs {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      flex: 1;
+    }
+    .layer-tab {
+      flex-shrink: 0;
+      padding: 4px 12px;
+      border-radius: 99px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      border: 1px solid #4b5563;
+      background: transparent;
+      color: #9ca3af;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .layer-tab:hover  { border-color: #6b7280; color: #e5e7eb; }
+    .layer-tab.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+    .layer-tab.off    { opacity: 0.45; }
+
+    /* ── Main layout ── */
+    #body { display: flex; flex: 1; overflow: hidden; }
+    #map  { flex: 1; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 260px;
+      flex-shrink: 0;
+      background: #1f2937;
+      border-left: 1px solid #374151;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #sidebar-inner { padding: 14px; overflow-y: auto; flex: 1; }
+
+    .section-label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #6b7280;
+      margin: 14px 0 6px;
+    }
+    .section-label:first-child { margin-top: 0; }
+
+    /* ── Legend ── */
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      line-height: 1.9;
+    }
+    .swatch {
+      width: 16px; height: 11px;
+      border-radius: 2px;
+      flex-shrink: 0;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    #legend-empty {
+      font-size: 0.78rem;
+      color: #6b7280;
+      font-style: italic;
+    }
+
+    /* ── Tile URL box ── */
+    #url-wrap {
+      margin-top: 4px;
+      background: #111827;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: monospace;
+      font-size: 0.68rem;
+      color: #93c5fd;
+      word-break: break-all;
+      cursor: pointer;
+      border: 1px solid #374151;
+      transition: border-color 0.15s;
+      position: relative;
+    }
+    #url-wrap:hover { border-color: #3b82f6; }
+    #url-copy-hint {
+      font-size: 0.65rem;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    /* ── Meta ── */
+    .meta-row {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      line-height: 1.8;
+    }
+    .meta-row span { color: #e5e7eb; }
+    #description {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      line-height: 1.5;
+      margin-top: 4px;
+    }
+
+    /* ── Opacity slider ── */
+    #opacity-wrap { display: flex; align-items: center; gap: 10px; }
+    #opacity-slider { flex: 1; accent-color: #3b82f6; cursor: pointer; }
+    #opacity-val { font-size: 0.75rem; color: #9ca3af; width: 28px; text-align: right; }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>Snow &amp; Terrain Tiles</h1>
+  <div id="layer-tabs"><!-- populated by JS --></div>
+</div>
+
+<div id="body">
+  <div id="map"></div>
+  <div id="sidebar">
+    <div id="sidebar-inner">
+
+      <div class="section-label">Active Layer</div>
+      <div id="layer-name" style="font-weight:600; font-size:0.9rem">—</div>
+      <div id="description"></div>
+
+      <div class="section-label">Opacity</div>
+      <div id="opacity-wrap">
+        <input id="opacity-slider" type="range" min="0" max="1" step="0.05" value="0.75" />
+        <div id="opacity-val">75%</div>
+      </div>
+
+      <div class="section-label">Legend</div>
+      <div id="legend-rows"><div id="legend-empty">No legend for this layer.</div></div>
+
+      <div class="section-label">Tile URL</div>
+      <div id="url-wrap" title="Click to copy">loading…</div>
+      <div id="url-copy-hint">Click to copy — paste into Gaia GPS custom map source</div>
+
+      <div class="section-label">Info</div>
+      <div class="meta-row">Valid at <span id="meta-valid">—</span></div>
+      <div class="meta-row">Built at <span id="meta-built">—</span></div>
+      <div class="meta-row" id="meta-attrib" style="margin-top:6px; font-size:0.68rem; color:#6b7280;"></div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── Map setup ──────────────────────────────────────────────────────────────
+const map = L.map("map", { center: [46.8, 8.2], zoom: 8 });
+
+L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+  attribution: "© OpenTopoMap contributors",
+  maxZoom: 17,
+  opacity: 0.85,
+}).addTo(map);
+
+// ── State ──────────────────────────────────────────────────────────────────
+const base      = window.location.href.replace(/\/?index\.html$/, "").replace(/\/$/, "");
+let   layers    = [];
+let   activeId  = null;
+let   overlays  = {};   // id → Leaflet TileLayer
+
+// ── Load manifest ──────────────────────────────────────────────────────────
+fetch(`${base}/layers.json`)
+  .then(r => r.json())
+  .then(data => {
+    layers = data.layers || [];
+    buildTabs();
+    if (layers.length > 0) activateLayer(layers[0].id);
+  })
+  .catch(() => {
+    document.getElementById("layer-tabs").innerHTML =
+      '<span style="font-size:0.78rem;color:#ef4444">layers.json not found — run build_tiles.py first</span>';
+  });
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function buildTabs() {
+  const container = document.getElementById("layer-tabs");
+  container.innerHTML = "";
+  layers.forEach(l => {
+    const btn = document.createElement("button");
+    btn.className   = "layer-tab off";
+    btn.textContent = l.name;
+    btn.dataset.id  = l.id;
+    btn.addEventListener("click", () => toggleLayer(l.id));
+    container.appendChild(btn);
+  });
+}
+
+function toggleLayer(id) {
+  if (activeId === id) return;   // clicking active layer does nothing
+  activateLayer(id);
+}
+
+function activateLayer(id) {
+  // Hide previous overlay
+  if (activeId && overlays[activeId]) {
+    map.removeLayer(overlays[activeId]);
+  }
+
+  // Update tab styling
+  document.querySelectorAll(".layer-tab").forEach(b => {
+    b.classList.toggle("active", b.dataset.id === id);
+    b.classList.toggle("off",    b.dataset.id !== id);
+  });
+
+  activeId = id;
+  const layer = layers.find(l => l.id === id);
+  if (!layer) return;
+
+  // Create or reuse overlay
+  if (!overlays[id]) {
+    const opacity = parseFloat(document.getElementById("opacity-slider").value);
+    overlays[id] = L.tileLayer(`${base}/${layer.tileUrl}`, {
+      opacity,
+      minZoom: layer.zoom?.min ?? 5,
+      maxZoom: layer.zoom?.max ?? 10,
+      tileSize: 256,
+      attribution: layer.attribution || "",
+      errorTileUrl: "",
+    });
+  }
+  overlays[id].addTo(map);
+
+  // Sync opacity slider to this layer's current opacity
+  document.getElementById("opacity-slider").value = overlays[id].options.opacity;
+  document.getElementById("opacity-val").textContent =
+    Math.round(overlays[id].options.opacity * 100) + "%";
+
+  updateSidebar(layer);
+}
+
+// ── Sidebar ────────────────────────────────────────────────────────────────
+function updateSidebar(layer) {
+  document.getElementById("layer-name").textContent = layer.name;
+  document.getElementById("description").textContent = layer.description || "";
+
+  // Legend
+  const legendEl = document.getElementById("legend-rows");
+  if (layer.legend && layer.legend.length > 0) {
+    legendEl.innerHTML = layer.legend.map(item => `
+      <div class="legend-row">
+        <div class="swatch" style="background:${item.color}"></div>
+        ${item.label}
+      </div>`).join("");
+  } else {
+    legendEl.innerHTML = '<div id="legend-empty">No legend defined for this layer.</div>';
+  }
+
+  // Tile URL
+  const tileUrl = `${base}/${layer.tileUrl}`;
+  document.getElementById("url-wrap").textContent = tileUrl;
+
+  // Meta
+  const fmtDate = iso => iso ? new Date(iso).toLocaleString() : "—";
+  document.getElementById("meta-valid").textContent = fmtDate(layer.validAt);
+  document.getElementById("meta-built").textContent = fmtDate(layer.builtAt);
+  document.getElementById("meta-attrib").textContent = layer.attribution || "";
+}
+
+// ── Tile URL copy ──────────────────────────────────────────────────────────
+document.getElementById("url-wrap").addEventListener("click", function() {
+  const url = this.textContent.trim();
+  navigator.clipboard.writeText(url).then(() => {
+    this.textContent = "✓ Copied!";
+    setTimeout(() => this.textContent = url, 1500);
+  });
+});
+
+// ── Opacity slider ─────────────────────────────────────────────────────────
+document.getElementById("opacity-slider").addEventListener("input", function() {
+  const val = parseFloat(this.value);
+  document.getElementById("opacity-val").textContent = Math.round(val * 100) + "%";
+  if (activeId && overlays[activeId]) {
+    overlays[activeId].setOpacity(val);
+  }
+});
+</script>
+</body>
+</html>
