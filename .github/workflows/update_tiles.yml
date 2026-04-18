@@ -30,26 +30,30 @@ jobs:
     permissions:
       contents: write
 
+    env:
+      # Opt into Node.js 24 now — Node 20 is being removed June 2026
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          enable-cache: true
+          python-version: "3.12"   # uv downloads and manages Python — no setup-python needed
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: uv sync --frozen   # --frozen ensures pyproject.toml is the source of truth, not a lockfile drift
 
       - name: Build tiles
         run: |
           ARGS=""
-          [ -n "${{ github.event.inputs.layer_id }}"   ] && ARGS="$ARGS --layer ${{ github.event.inputs.layer_id }}"
-          [ -n "${{ github.event.inputs.max_zoom }}"   ] && ARGS="$ARGS --max-zoom ${{ github.event.inputs.max_zoom }}"
+          [ -n "${{ github.event.inputs.layer_id }}"  ] && ARGS="$ARGS --layer ${{ github.event.inputs.layer_id }}"
+          [ -n "${{ github.event.inputs.max_zoom }}"  ] && ARGS="$ARGS --max-zoom ${{ github.event.inputs.max_zoom }}"
           [ "${{ github.event.inputs.also_mbtiles }}" = "true" ] && ARGS="$ARGS --also-mbtiles"
-          python build_tiles.py $ARGS
+          uv run build_tiles.py $ARGS
 
       - name: Upload .mbtiles as workflow artifact (if generated)
         if: github.event.inputs.also_mbtiles == 'true'
