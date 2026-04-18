@@ -1,0 +1,26 @@
+[project]
+name = "slf-snow-tiles"
+version = "0.1.0"
+description = "Render SLF snow depth GeoJSON to static XYZ tiles for Gaia GPS"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+dependencies = [
+    "mercantile>=1.2.1",
+    "Pillow>=10.0",
+    "PyYAML>=6.0",
+    "requests>=2.31",
+    "shapely>=2.0",
+]
+
+[project.scripts]
+build-tiles = "build_tiles:main"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
