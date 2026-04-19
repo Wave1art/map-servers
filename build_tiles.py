@@ -651,6 +651,45 @@ def update_manifest(layer: dict, result: dict, base_url_hint: str = "") -> None:
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
 
+def sync_manifest_with_config(config: dict) -> None:
+    """
+    Ensure every configured layer with tiles on disk has a manifest entry so the
+    preview page can list it, even for layers that weren't built in this run.
+    Preserves builtAt/validAt for existing entries; only fills in gaps.
+    """
+    manifest_path = DOCS_DIR / "layers.json"
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text())
+    else:
+        manifest = {"layers": []}
+
+    existing_ids = {l["id"] for l in manifest["layers"]}
+    for layer in config["layers"]:
+        layer_id = layer["id"]
+        if layer_id in existing_ids:
+            continue
+        tile_dir = TILES_DIR / layer_id
+        if not tile_dir.exists() or not any(tile_dir.rglob("*.png")):
+            continue  # no tiles yet, don't advertise it
+        manifest["layers"].append({
+            "id":          layer_id,
+            "name":        layer["name"],
+            "description": layer.get("description", ""),
+            "tileUrl":     f"tiles/{layer_id}/{{z}}/{{x}}/{{y}}.png",
+            "attribution": layer.get("attribution", ""),
+            "legend":      layer.get("legend", []),
+            "zoom":        layer["zoom"],
+            "validAt":     None,
+            "builtAt":     None,
+        })
+
+    # Preserve the ordering from layers.yml so the preview tabs match config.
+    order = {l["id"]: i for i, l in enumerate(config["layers"])}
+    manifest["layers"].sort(key=lambda l: order.get(l["id"], 999))
+
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
@@ -749,6 +788,10 @@ def main():
             print(f"\n  ✗ Unexpected error: {e}")
             failed.append(layer_id)
             raise   # unexpected errors still bubble up for visibility
+
+    # Backfill manifest for any other configured layers that already have tiles
+    # on disk, so the preview navigation lists every available layer.
+    sync_manifest_with_config(config)
 
     print(f"\n{'═' * 60}")
     if failed:
