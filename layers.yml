@@ -13,7 +13,11 @@
 
 # ── Defaults applied to every layer (can be overridden per layer) ─────────────
 defaults:
-  bounds: [5.96, 45.82, 10.49, 47.81]   # Switzerland  (west, south, east, north)
+  # bounds can be specified as:
+  #   "switzerland"              — named geography (see NAMED_GEOGRAPHIES in build_tiles.py)
+  #   [west, south, east, north] — explicit bbox
+  #   [[lon,lat], ...]           — polygon (Overpass uses poly: filter; tiles use the envelope)
+  bounds: switzerland
   zoom:
     min: 5
     max: 10
@@ -89,6 +93,52 @@ layers:
     zoom:
       min: 5
       max: 11
+
+  # ── Road gradients (MTB) ────────────────────────────────────────────────────
+  # Fetches MTB-relevant roads from Overpass API and samples the Copernicus
+  # GLO-30 DEM (30 m resolution, WGS84 COGs on AWS S3) for elevation.
+  # Gradient = |Δ elevation| / segment_length × 100 %.
+  # Roads don't change often — rebuild weekly is plenty.
+  - id: road-gradients
+    name: Road Gradients (MTB)
+    description: >
+      Gradient (steepness) of MTB-relevant roads and trails in Switzerland,
+      derived from the Copernicus GLO-30 digital elevation model.
+      Colour-coded by gradient band from flat (green) to extreme (dark red).
+    type: road_gradient
+    url: null          # data fetched live from Overpass API
+    schedule: null
+    attribution: "© OpenStreetMap contributors (ODbL) | © Copernicus DEM (ESA/Sinergise, CC BY 4.0)"
+    zoom:
+      min: 8
+      max: 12          # roads need higher zoom than broad snow polygons
+    style:
+      highway_types:
+        - path
+        - track
+        - bridleway
+        - cycleway
+        - unclassified
+        - tertiary
+        - residential
+        - living_street
+        - service
+      max_segment_length_m: 250
+      line_width_base: 2     # pixels at z10; scales ±1 per zoom level
+      bands:
+        - { max: 3,    color: "#91cf60" }   # flat   0–3 %
+        - { max: 6,    color: "#fee08b" }   # gentle 3–6 %
+        - { max: 10,   color: "#fdae61" }   # moderate 6–10 %
+        - { max: 15,   color: "#f46d43" }   # steep 10–15 %
+        - { max: 20,   color: "#d73027" }   # very steep 15–20 %
+        - { max: null, color: "#a50026" }   # extreme  ≥ 20 %
+    legend:
+      - { label: "0–3 %",   color: "#91cf60" }
+      - { label: "3–6 %",   color: "#fee08b" }
+      - { label: "6–10 %",  color: "#fdae61" }
+      - { label: "10–15 %", color: "#f46d43" }
+      - { label: "15–20 %", color: "#d73027" }
+      - { label: "≥ 20 %",  color: "#a50026" }
 
   # ── TEMPLATE: add your own layer ────────────────────────────────────────────
   # Uncomment and fill in to add a new GeoJSON source:

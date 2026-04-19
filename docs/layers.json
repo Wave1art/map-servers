@@ -40,8 +40,75 @@
         "min": 5,
         "max": 10
       },
-      "validAt": "2026-04-18T06:00:00Z",
-      "builtAt": "2026-04-18T19:14:08.446584+00:00"
+      "validAt": "2026-04-19T06:00:00Z",
+      "builtAt": "2026-04-19T20:25:21.684644+00:00"
+    },
+    {
+      "id": "slope-30",
+      "name": "Slope \u2265 30\u00b0 (Avalanche terrain)",
+      "description": "Terrain steeper than 30\u00b0 \u2014 key context layer for avalanche risk. Source: swisstopo digital terrain model.\n",
+      "tileUrl": "tiles/slope-30/{z}/{x}/{y}.png",
+      "attribution": "\u00a9 swisstopo (opendata.swiss)",
+      "legend": [],
+      "zoom": {
+        "min": 5,
+        "max": 12
+      },
+      "validAt": null,
+      "builtAt": "2026-04-19T20:28:27.189709+00:00"
+    },
+    {
+      "id": "avalanche-zones",
+      "name": "Avalanche Release Zones",
+      "description": "Potential avalanche release areas from the SilvaProtect-CH hazard dataset.\n",
+      "tileUrl": "tiles/avalanche-zones/{z}/{x}/{y}.png",
+      "attribution": "\u00a9 BAFU/OFEV (opendata.swiss)",
+      "legend": [],
+      "zoom": {
+        "min": 5,
+        "max": 11
+      },
+      "validAt": null,
+      "builtAt": "2026-04-19T20:29:19.460070+00:00"
+    },
+    {
+      "id": "road-gradients",
+      "name": "Road Gradients (MTB)",
+      "description": "Gradient (steepness) of MTB-relevant roads and trails in Switzerland, derived from the Copernicus GLO-30 digital elevation model. Colour-coded by gradient band from flat (green) to extreme (dark red).\n",
+      "tileUrl": "tiles/road-gradients/{z}/{x}/{y}.png",
+      "attribution": "\u00a9 OpenStreetMap contributors (ODbL) | \u00a9 Copernicus DEM (ESA/Sinergise, CC BY 4.0)",
+      "legend": [
+        {
+          "label": "0\u20133 %",
+          "color": "#91cf60"
+        },
+        {
+          "label": "3\u20136 %",
+          "color": "#fee08b"
+        },
+        {
+          "label": "6\u201310 %",
+          "color": "#fdae61"
+        },
+        {
+          "label": "10\u201315 %",
+          "color": "#f46d43"
+        },
+        {
+          "label": "15\u201320 %",
+          "color": "#d73027"
+        },
+        {
+          "label": "\u2265 20 %",
+          "color": "#a50026"
+        }
+      ],
+      "zoom": {
+        "min": 8,
+        "max": 12
+      },
+      "validAt": null,
+      "builtAt": "2026-04-19T23:23:05.032867+00:00"
     }
   ]
 }

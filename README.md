@@ -9,7 +9,6 @@ Tile sets are rebuilt daily by a GitHub Actions workflow and committed back to t
 | ID | Name | Source | Updates |
 |----|------|--------|---------|
 | `slf-snow-depth` | Snow Depth (HS 1-day) | SLF HS1D-v2 GeoJSON | Daily 07:15 UTC |
-| `slf-new-snow` | New Snow (HN 1-day) | SLF HN1D-v2 GeoJSON | Daily 07:15 UTC |
 | `slope-30` | Slope ≥ 30° | swisstopo WMTS | Static |
 | `avalanche-zones` | Avalanche Release Zones | BAFU SilvaProtect WMTS | Static |
 
