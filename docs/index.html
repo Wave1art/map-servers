@@ -140,6 +140,47 @@
     #opacity-wrap { display: flex; align-items: center; gap: 10px; }
     #opacity-slider { flex: 1; accent-color: #3b82f6; cursor: pointer; }
     #opacity-val { font-size: 0.75rem; color: #9ca3af; width: 28px; text-align: right; }
+
+    /* ── Locate button ── */
+    #locate-btn {
+      position: absolute;
+      bottom: 110px;
+      right: 10px;
+      z-index: 1000;
+      width: 34px;
+      height: 34px;
+      background: #fff;
+      border: 2px solid rgba(0,0,0,0.2);
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    }
+    #locate-btn:hover { background: #f4f4f4; }
+    #locate-btn.locating { opacity: 0.6; cursor: wait; }
+
+    /* ── Base layer selector (sidebar) ── */
+    .base-layer-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: 1px solid #374151;
+      border-radius: 4px;
+      color: #9ca3af;
+      font-size: 0.78rem;
+      padding: 4px 8px;
+      cursor: pointer;
+      margin-bottom: 4px;
+    }
+    .base-layer-btn:hover { border-color: #6b7280; color: #e5e7eb; }
+    .base-layer-btn.active { border-color: #3b82f6; color: #e5e7eb; background: #1e3a5f; }
+
+    /* ── Leaflet layer control override (hide default) ── */
+    .leaflet-control-layers { display: none; }
   </style>
 </head>
 <body>
@@ -150,7 +191,9 @@
 </div>
 
 <div id="body">
-  <div id="map"></div>
+  <div id="map">
+    <button id="locate-btn" title="Go to my location">📍</button>
+  </div>
   <div id="sidebar">
     <div id="sidebar-inner">
 
@@ -171,6 +214,9 @@
       <div id="url-wrap" title="Click to copy">loading…</div>
       <div id="url-copy-hint">Click to copy — paste into Gaia GPS custom map source</div>
 
+      <div class="section-label">Base Map</div>
+      <div id="base-layer-btns"><!-- populated by JS --></div>
+
       <div class="section-label">Info</div>
       <div class="meta-row">Valid at <span id="meta-valid">—</span></div>
       <div class="meta-row">Built at <span id="meta-built">—</span></div>
@@ -182,14 +228,57 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+// ── Base layers ────────────────────────────────────────────────────────────
+const BASE_LAYERS = [
+  {
+    id:   "topo",
+    name: "Topo",
+    layer: L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenTopoMap contributors",
+      maxZoom: 17,
+    }),
+  },
+  {
+    id:   "grey",
+    name: "Grey",
+    layer: L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
+      subdomains: "abcd",
+      maxZoom: 20,
+    }),
+  },
+  {
+    id:   "osm",
+    name: "OSM",
+    layer: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors",
+      maxZoom: 19,
+    }),
+  },
+];
+
 // ── Map setup ──────────────────────────────────────────────────────────────
 const map = L.map("map", { center: [46.8, 8.2], zoom: 8 });
 
-L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
-  attribution: "© OpenTopoMap contributors",
-  maxZoom: 17,
-  opacity: 0.85,
-}).addTo(map);
+let activeBase = BASE_LAYERS[0];
+activeBase.layer.addTo(map);
+
+// Build base layer buttons
+const baseContainer = document.getElementById("base-layer-btns");
+BASE_LAYERS.forEach(bl => {
+  const btn = document.createElement("button");
+  btn.className   = "base-layer-btn" + (bl === activeBase ? " active" : "");
+  btn.textContent = bl.name;
+  btn.addEventListener("click", () => {
+    if (bl === activeBase) return;
+    map.removeLayer(activeBase.layer);
+    bl.layer.addTo(map);
+    activeBase = bl;
+    document.querySelectorAll(".base-layer-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+  });
+  baseContainer.appendChild(btn);
+});
 
 // ── State ──────────────────────────────────────────────────────────────────
 const base      = window.location.href.replace(/\/?index\.html$/, "").replace(/\/$/, "");
@@ -250,8 +339,9 @@ function activateLayer(id) {
     const opacity = parseFloat(document.getElementById("opacity-slider").value);
     overlays[id] = L.tileLayer(`${base}/${layer.tileUrl}`, {
       opacity,
-      minZoom: layer.zoom?.min ?? 5,
-      maxZoom: layer.zoom?.max ?? 10,
+      minZoom:       layer.zoom?.min ?? 5,
+      maxNativeZoom: layer.zoom?.max ?? 14,  // tiles only exist up to here…
+      maxZoom:       20,                     // …but scale them up beyond
       tileSize: 256,
       attribution: layer.attribution || "",
       errorTileUrl: "",
@@ -311,6 +401,28 @@ document.getElementById("opacity-slider").addEventListener("input", function() {
   if (activeId && overlays[activeId]) {
     overlays[activeId].setOpacity(val);
   }
+});
+
+// ── Locate button ──────────────────────────────────────────────────────────
+const locateBtn = document.getElementById("locate-btn");
+locateBtn.addEventListener("click", () => {
+  locateBtn.classList.add("locating");
+  locateBtn.textContent = "⌛";
+  map.once("locationfound", e => {
+    locateBtn.classList.remove("locating");
+    locateBtn.textContent = "📍";
+    map.flyTo(e.latlng, Math.max(map.getZoom(), 13));
+    L.circleMarker(e.latlng, {
+      radius: 8, color: "#3b82f6", fillColor: "#3b82f6",
+      fillOpacity: 0.4, weight: 2,
+    }).addTo(map).bindPopup("You are here").openPopup();
+  });
+  map.once("locationerror", () => {
+    locateBtn.classList.remove("locating");
+    locateBtn.textContent = "📍";
+    alert("Location unavailable — check browser permissions.");
+  });
+  map.locate({ setView: false });
 });
 </script>
 </body>

@@ -92,7 +92,7 @@ layers:
     attribution: "© BAFU/OFEV (opendata.swiss)"
     zoom:
       min: 5
-      max: 11
+      max: 12
 
   # ── Road gradients (MTB) ────────────────────────────────────────────────────
   # Fetches MTB-relevant roads from Overpass API and samples the Copernicus
@@ -111,7 +111,7 @@ layers:
     attribution: "© OpenStreetMap contributors (ODbL) | © Copernicus DEM (ESA/Sinergise, CC BY 4.0)"
     zoom:
       min: 8
-      max: 12          # roads need higher zoom than broad snow polygons
+      max: 14          # roads need higher zoom than broad snow polygons
     style:
       highway_types:
         - path

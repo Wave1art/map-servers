@@ -582,7 +582,8 @@ def build_road_gradient_layer(
     total_rendered = 0
 
     for z in range(z_min, z_max + 1):
-        # Line width scales gently with zoom
+        # Linear: +1 px per zoom level above 10, floor 1.
+        # z8→1, z9→1, z10→2, z11→3, z12→4, z13→5, z14→6
         line_width = max(1, line_width_base + (z - 10))
         candidates = list(mercantile.tiles(*bounds, zooms=z))
         rendered   = 0
