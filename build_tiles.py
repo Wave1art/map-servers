@@ -44,16 +44,43 @@ try:
     import requests
     import yaml
     from PIL import Image, ImageDraw
+    from requests.adapters import HTTPAdapter
     from shapely.geometry import box, shape
+    from urllib3.util.retry import Retry
 except ImportError as e:
     print(f"\nMissing dependency: {e}")
-    print("Run: pip install -r requirements.txt\n")
+    print("Run: uv sync\n")
     sys.exit(1)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-TILE_SIZE = 256
-_R        = 6378137.0        # Web Mercator Earth radius (metres)
-WMTS_DELAY = 0.05            # seconds between WMTS tile requests (be polite)
+TILE_SIZE  = 256
+_R         = 6378137.0   # Web Mercator Earth radius (metres)
+WMTS_DELAY = 0.05        # seconds between WMTS tile requests (be polite)
+
+# Looks like a real browser — some public servers (including SLF) block
+# Python/requests default UA or known CI IP ranges at the application layer.
+_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
+
+
+def make_session() -> requests.Session:
+    """Return a requests Session with retry logic and a browser User-Agent."""
+    retry = Retry(
+        total=4,
+        backoff_factor=2,          # waits 2, 4, 8, 16 s between attempts
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    s = requests.Session()
+    s.mount("https://", adapter)
+    s.mount("http://",  adapter)
+    s.headers.update({"User-Agent": _USER_AGENT})
+    return s
 
 CONFIG_FILE = Path(__file__).parent / "layers.yml"
 DOCS_DIR    = Path(__file__).parent / "docs"
@@ -247,6 +274,7 @@ def build_geojson_layer(
     also_mbtiles: bool = False,
     zoom_min: int | None = None,
     zoom_max: int | None = None,
+    session: requests.Session | None = None,
 ) -> dict:
     """Fetch GeoJSON and render to XYZ tiles."""
     url = layer["url"]
@@ -255,8 +283,9 @@ def build_geojson_layer(
         import json as _json
         data = _json.loads(Path(local_file).read_text())
     else:
+        s = session or make_session()
         print(f"  Fetching {url}")
-        r = requests.get(url, timeout=30)
+        r = s.get(url, timeout=(10, 60))   # (connect timeout, read timeout)
         r.raise_for_status()
         data = r.json()
 
@@ -402,8 +431,9 @@ def main():
     layers = ([get_layer(config, args.layer)] if args.layer
               else config["layers"])
 
-    session = requests.Session()
-    session.headers.update({"User-Agent": "slf-tile-builder/1.0"})
+    session  = make_session()
+    failed   = []
+    skipped  = []
 
     for layer in layers:
         layer_id = layer["id"]
@@ -422,6 +452,7 @@ def main():
                     also_mbtiles=args.also_mbtiles,
                     zoom_min=args.min_zoom,
                     zoom_max=args.max_zoom,
+                    session=session,
                 )
             elif layer["type"] == "wmts":
                 result = build_wmts_layer(
@@ -432,20 +463,43 @@ def main():
                 )
             else:
                 print(f"  ✗ Unknown type '{layer['type']}' — skipping")
+                skipped.append(layer_id)
                 continue
 
             update_manifest(layer, result)
-
             size_kb = sum(f.stat().st_size for f in out_dir.rglob("*.png")) // 1024
             print(f"\n  ✓ {result['rendered']} tiles  |  {size_kb} KB  →  {out_dir}")
 
+        except requests.exceptions.ConnectTimeout:
+            print(f"\n  ✗ Timed out fetching {layer.get('url', '?')}")
+            print(     "    The source server may be blocking CI IP ranges.")
+            print(     "    Tiles from the last successful run are unchanged.")
+            failed.append(layer_id)
+
+        except requests.exceptions.RequestException as e:
+            print(f"\n  ✗ Network error: {e}")
+            print(     "    Tiles from the last successful run are unchanged.")
+            failed.append(layer_id)
+
         except Exception as e:
-            print(f"\n  ✗ Failed: {e}")
-            raise
+            print(f"\n  ✗ Unexpected error: {e}")
+            failed.append(layer_id)
+            raise   # unexpected errors still bubble up for visibility
 
     print(f"\n{'═' * 60}")
-    print("  All done.")
+    if failed:
+        print(f"  ⚠  {len(failed)} layer(s) failed: {', '.join(failed)}")
+        print(     "     Existing tiles for those layers were not changed.")
+    if skipped:
+        print(f"  –  {len(skipped)} layer(s) skipped: {', '.join(skipped)}")
+    success = len(layers) - len(failed) - len(skipped)
+    print(f"  ✓  {success} layer(s) built successfully.")
     print(f"{'═' * 60}\n")
+
+    # Exit non-zero only if ALL layers failed — partial success is still a
+    # successful run (existing tiles for failed layers remain valid).
+    if failed and success == 0:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

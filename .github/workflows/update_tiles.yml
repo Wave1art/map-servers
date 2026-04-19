@@ -48,6 +48,10 @@ jobs:
         run: uv sync --frozen   # --frozen ensures pyproject.toml is the source of truth, not a lockfile drift
 
       - name: Build tiles
+        # Individual layer fetch failures (e.g. source server blocking CI IPs)
+        # are handled gracefully in build_tiles.py — the step only exits non-zero
+        # if every single layer fails. Partial success commits whatever built.
+        timeout-minutes: 15
         run: |
           ARGS=""
           [ -n "${{ github.event.inputs.layer_id }}"  ] && ARGS="$ARGS --layer ${{ github.event.inputs.layer_id }}"
