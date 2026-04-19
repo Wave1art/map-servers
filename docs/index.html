@@ -141,46 +141,38 @@
     #opacity-slider { flex: 1; accent-color: #3b82f6; cursor: pointer; }
     #opacity-val { font-size: 0.75rem; color: #9ca3af; width: 28px; text-align: right; }
 
-    /* ── Locate button ── */
-    #locate-btn {
-      position: absolute;
-      bottom: 110px;
-      right: 10px;
-      z-index: 1000;
-      width: 34px;
-      height: 34px;
-      background: #fff;
-      border: 2px solid rgba(0,0,0,0.2);
-      border-radius: 4px;
-      cursor: pointer;
+    /* ── Leaflet custom controls ── */
+    .leaflet-control-locate a,
+    .leaflet-control-baselayers a {
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.1rem;
-      box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-    }
-    #locate-btn:hover { background: #f4f4f4; }
-    #locate-btn.locating { opacity: 0.6; cursor: wait; }
-
-    /* ── Base layer selector (sidebar) ── */
-    .base-layer-btn {
-      display: block;
-      width: 100%;
-      text-align: left;
-      background: transparent;
-      border: 1px solid #374151;
-      border-radius: 4px;
-      color: #9ca3af;
-      font-size: 0.78rem;
-      padding: 4px 8px;
+      width: 30px;
+      height: 30px;
       cursor: pointer;
-      margin-bottom: 4px;
     }
-    .base-layer-btn:hover { border-color: #6b7280; color: #e5e7eb; }
-    .base-layer-btn.active { border-color: #3b82f6; color: #e5e7eb; background: #1e3a5f; }
+    .leaflet-control-locate a svg { display: block; }
+    .leaflet-control-locate a.locating { opacity: 0.5; cursor: wait; }
 
-    /* ── Leaflet layer control override (hide default) ── */
-    .leaflet-control-layers { display: none; }
+    .leaflet-control-baselayers {
+      background: #fff;
+      border-radius: 4px;
+      box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+      border: 2px solid rgba(0,0,0,0.2);
+      overflow: hidden;
+    }
+    .leaflet-control-baselayers a {
+      width: auto;
+      padding: 0 10px;
+      font-size: 0.78rem;
+      font-family: system-ui, sans-serif;
+      color: #333;
+      border-bottom: 1px solid #ddd;
+      white-space: nowrap;
+    }
+    .leaflet-control-baselayers a:last-child { border-bottom: none; }
+    .leaflet-control-baselayers a:hover { background: #f4f4f4; }
+    .leaflet-control-baselayers a.active { background: #dbeafe; color: #1d4ed8; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -191,9 +183,7 @@
 </div>
 
 <div id="body">
-  <div id="map">
-    <button id="locate-btn" title="Go to my location">📍</button>
-  </div>
+  <div id="map"></div>
   <div id="sidebar">
     <div id="sidebar-inner">
 
@@ -214,9 +204,6 @@
       <div id="url-wrap" title="Click to copy">loading…</div>
       <div id="url-copy-hint">Click to copy — paste into Gaia GPS custom map source</div>
 
-      <div class="section-label">Base Map</div>
-      <div id="base-layer-btns"><!-- populated by JS --></div>
-
       <div class="section-label">Info</div>
       <div class="meta-row">Valid at <span id="meta-valid">—</span></div>
       <div class="meta-row">Built at <span id="meta-built">—</span></div>
@@ -228,19 +215,19 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// ── Base layers ────────────────────────────────────────────────────────────
+// ── Base layer definitions ─────────────────────────────────────────────────
 const BASE_LAYERS = [
   {
-    id:   "topo",
-    name: "Topo",
+    id:    "topo",
+    name:  "Topo",
     layer: L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenTopoMap contributors",
       maxZoom: 17,
     }),
   },
   {
-    id:   "grey",
-    name: "Grey",
+    id:    "grey",
+    name:  "Grey",
     layer: L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
       subdomains: "abcd",
@@ -248,8 +235,8 @@ const BASE_LAYERS = [
     }),
   },
   {
-    id:   "osm",
-    name: "OSM",
+    id:    "osm",
+    name:  "OSM",
     layer: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors",
       maxZoom: 19,
@@ -258,33 +245,87 @@ const BASE_LAYERS = [
 ];
 
 // ── Map setup ──────────────────────────────────────────────────────────────
-const map = L.map("map", { center: [46.8, 8.2], zoom: 8 });
+const map = L.map("map", { center: [46.8, 8.2], zoom: 8, zoomControl: true });
 
 let activeBase = BASE_LAYERS[0];
 activeBase.layer.addTo(map);
 
-// Build base layer buttons
-const baseContainer = document.getElementById("base-layer-btns");
-BASE_LAYERS.forEach(bl => {
-  const btn = document.createElement("button");
-  btn.className   = "base-layer-btn" + (bl === activeBase ? " active" : "");
-  btn.textContent = bl.name;
-  btn.addEventListener("click", () => {
-    if (bl === activeBase) return;
-    map.removeLayer(activeBase.layer);
-    bl.layer.addTo(map);
-    activeBase = bl;
-    document.querySelectorAll(".base-layer-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-  });
-  baseContainer.appendChild(btn);
+// ── Base layer Leaflet control (top-right) ────────────────────────────────
+const BaselayerControl = L.Control.extend({
+  options: { position: "topright" },
+  onAdd() {
+    const div = L.DomUtil.create("div", "leaflet-control-baselayers");
+    L.DomEvent.disableClickPropagation(div);
+    BASE_LAYERS.forEach(bl => {
+      const a = L.DomUtil.create("a", bl === activeBase ? "active" : "", div);
+      a.textContent = bl.name;
+      a.href = "#";
+      L.DomEvent.on(a, "click", e => {
+        L.DomEvent.preventDefault(e);
+        if (bl === activeBase) return;
+        map.removeLayer(activeBase.layer);
+        bl.layer.addTo(map);
+        // Bring active overlay above the new base layer
+        if (activeId && overlays[activeId]) overlays[activeId].bringToFront();
+        activeBase = bl;
+        div.querySelectorAll("a").forEach(el => el.classList.remove("active"));
+        a.classList.add("active");
+      });
+    });
+    return div;
+  },
 });
+new BaselayerControl().addTo(map);
+
+// ── Locate Leaflet control (bottom-right) ────────────────────────────────
+const CROSSHAIR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+  <circle cx="12" cy="12" r="6"/>
+  <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+  <line x1="12" y1="2" x2="12" y2="6"/>
+  <line x1="12" y1="18" x2="12" y2="22"/>
+  <line x1="2" y1="12" x2="6" y2="12"/>
+  <line x1="18" y1="12" x2="22" y2="12"/>
+</svg>`;
+
+let locationMarker = null;
+
+const LocateControl = L.Control.extend({
+  options: { position: "bottomright" },
+  onAdd() {
+    const div = L.DomUtil.create("div", "leaflet-control-locate leaflet-bar");
+    const a   = L.DomUtil.create("a", "", div);
+    a.title   = "Go to my location";
+    a.href    = "#";
+    a.innerHTML = CROSSHAIR_SVG;
+    L.DomEvent.disableClickPropagation(div);
+    L.DomEvent.on(a, "click", e => {
+      L.DomEvent.preventDefault(e);
+      a.classList.add("locating");
+      map.once("locationfound", ev => {
+        a.classList.remove("locating");
+        map.flyTo(ev.latlng, Math.max(map.getZoom(), 13));
+        if (locationMarker) locationMarker.remove();
+        locationMarker = L.circleMarker(ev.latlng, {
+          radius: 8, color: "#3b82f6", fillColor: "#3b82f6",
+          fillOpacity: 0.35, weight: 2,
+        }).addTo(map).bindPopup("You are here").openPopup();
+      });
+      map.once("locationerror", () => {
+        a.classList.remove("locating");
+        alert("Location unavailable — check browser permissions.");
+      });
+      map.locate({ setView: false });
+    });
+    return div;
+  },
+});
+new LocateControl().addTo(map);
 
 // ── State ──────────────────────────────────────────────────────────────────
-const base      = window.location.href.replace(/\/?index\.html$/, "").replace(/\/$/, "");
-let   layers    = [];
-let   activeId  = null;
-let   overlays  = {};   // id → Leaflet TileLayer
+const base     = window.location.href.replace(/\/?index\.html$/, "").replace(/\/$/, "");
+let   layers   = [];
+let   activeId = null;
+let   overlays = {};   // id → Leaflet TileLayer
 
 // ── Load manifest ──────────────────────────────────────────────────────────
 fetch(`${base}/layers.json`)
@@ -308,23 +349,14 @@ function buildTabs() {
     btn.className   = "layer-tab off";
     btn.textContent = l.name;
     btn.dataset.id  = l.id;
-    btn.addEventListener("click", () => toggleLayer(l.id));
+    btn.addEventListener("click", () => activateLayer(l.id));
     container.appendChild(btn);
   });
 }
 
-function toggleLayer(id) {
-  if (activeId === id) return;   // clicking active layer does nothing
-  activateLayer(id);
-}
-
 function activateLayer(id) {
-  // Hide previous overlay
-  if (activeId && overlays[activeId]) {
-    map.removeLayer(overlays[activeId]);
-  }
+  if (activeId && overlays[activeId]) map.removeLayer(overlays[activeId]);
 
-  // Update tab styling
   document.querySelectorAll(".layer-tab").forEach(b => {
     b.classList.toggle("active", b.dataset.id === id);
     b.classList.toggle("off",    b.dataset.id !== id);
@@ -334,22 +366,20 @@ function activateLayer(id) {
   const layer = layers.find(l => l.id === id);
   if (!layer) return;
 
-  // Create or reuse overlay
   if (!overlays[id]) {
     const opacity = parseFloat(document.getElementById("opacity-slider").value);
     overlays[id] = L.tileLayer(`${base}/${layer.tileUrl}`, {
       opacity,
       minZoom:       layer.zoom?.min ?? 5,
-      maxNativeZoom: layer.zoom?.max ?? 14,  // tiles only exist up to here…
-      maxZoom:       20,                     // …but scale them up beyond
-      tileSize: 256,
-      attribution: layer.attribution || "",
-      errorTileUrl: "",
+      maxNativeZoom: layer.zoom?.max ?? 14,
+      maxZoom:       20,
+      tileSize:      256,
+      attribution:   layer.attribution || "",
+      errorTileUrl:  "",
     });
   }
-  overlays[id].addTo(map);
+  overlays[id].addTo(map).bringToFront();
 
-  // Sync opacity slider to this layer's current opacity
   document.getElementById("opacity-slider").value = overlays[id].options.opacity;
   document.getElementById("opacity-val").textContent =
     Math.round(overlays[id].options.opacity * 100) + "%";
@@ -359,10 +389,9 @@ function activateLayer(id) {
 
 // ── Sidebar ────────────────────────────────────────────────────────────────
 function updateSidebar(layer) {
-  document.getElementById("layer-name").textContent = layer.name;
-  document.getElementById("description").textContent = layer.description || "";
+  document.getElementById("layer-name").textContent    = layer.name;
+  document.getElementById("description").textContent   = layer.description || "";
 
-  // Legend
   const legendEl = document.getElementById("legend-rows");
   if (layer.legend && layer.legend.length > 0) {
     legendEl.innerHTML = layer.legend.map(item => `
@@ -374,14 +403,12 @@ function updateSidebar(layer) {
     legendEl.innerHTML = '<div id="legend-empty">No legend defined for this layer.</div>';
   }
 
-  // Tile URL
   const tileUrl = `${base}/${layer.tileUrl}`;
   document.getElementById("url-wrap").textContent = tileUrl;
 
-  // Meta
   const fmtDate = iso => iso ? new Date(iso).toLocaleString() : "—";
-  document.getElementById("meta-valid").textContent = fmtDate(layer.validAt);
-  document.getElementById("meta-built").textContent = fmtDate(layer.builtAt);
+  document.getElementById("meta-valid").textContent  = fmtDate(layer.validAt);
+  document.getElementById("meta-built").textContent  = fmtDate(layer.builtAt);
   document.getElementById("meta-attrib").textContent = layer.attribution || "";
 }
 
@@ -398,31 +425,7 @@ document.getElementById("url-wrap").addEventListener("click", function() {
 document.getElementById("opacity-slider").addEventListener("input", function() {
   const val = parseFloat(this.value);
   document.getElementById("opacity-val").textContent = Math.round(val * 100) + "%";
-  if (activeId && overlays[activeId]) {
-    overlays[activeId].setOpacity(val);
-  }
-});
-
-// ── Locate button ──────────────────────────────────────────────────────────
-const locateBtn = document.getElementById("locate-btn");
-locateBtn.addEventListener("click", () => {
-  locateBtn.classList.add("locating");
-  locateBtn.textContent = "⌛";
-  map.once("locationfound", e => {
-    locateBtn.classList.remove("locating");
-    locateBtn.textContent = "📍";
-    map.flyTo(e.latlng, Math.max(map.getZoom(), 13));
-    L.circleMarker(e.latlng, {
-      radius: 8, color: "#3b82f6", fillColor: "#3b82f6",
-      fillOpacity: 0.4, weight: 2,
-    }).addTo(map).bindPopup("You are here").openPopup();
-  });
-  map.once("locationerror", () => {
-    locateBtn.classList.remove("locating");
-    locateBtn.textContent = "📍";
-    alert("Location unavailable — check browser permissions.");
-  });
-  map.locate({ setView: false });
+  if (activeId && overlays[activeId]) overlays[activeId].setOpacity(val);
 });
 </script>
 </body>
