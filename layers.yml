@@ -57,7 +57,7 @@ layers:
       SLF daily new snow accumulation (HN1D-v2). Updated at 06:00 UTC.
     type: geojson
     url: https://snow-maps-hs.slf.ch/public/hs/map/HN1D-v2/current/geojson
-    schedule: "15 7 * * *"
+    schedule: null
     attribution: "© WSL Institute for Snow and Avalanche Research SLF (www.slf.ch)"
     style:
       fill_property: fill
