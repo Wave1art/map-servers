@@ -57,13 +57,27 @@ layers:
       SLF daily new snow accumulation (HN1D-v2). Updated at 06:00 UTC.
     type: geojson
     url: https://snow-maps-hs.slf.ch/public/hs/map/HN1D-v2/current/geojson
-    schedule: "15 7 * * *"
+    schedule: null # "15 7 * * *"
     attribution: "© WSL Institute for Snow and Avalanche Research SLF (www.slf.ch)"
     style:
       fill_property: fill
       partial_property: partialSnowCover
       opacity_full: 0.82
       opacity_partial: 0.43
+
+  # ── swisstopo: slope ≥ 30° ───────────────────────────────────────────────────
+  # Static terrain data — run once manually, no need to refresh.
+  - id: swisstopo-grey
+    name: Swiss Topo (Grey)
+    description: >
+      Official swisstopo grayscale map (Pixelkarte-Grau).
+    type: wmts
+    url: "https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.pixelkarte-grau/default/current/3857/{z}/{x}/{y}.jpeg"
+    schedule: null
+    attribution: "© swisstopo"
+    zoom:
+      min: 5
+      max: 12
 
   # ── swisstopo: slope ≥ 30° ───────────────────────────────────────────────────
   # Static terrain data — run once manually, no need to refresh.
@@ -111,7 +125,7 @@ layers:
     attribution: "© OpenStreetMap contributors (ODbL) | © Copernicus DEM (ESA/Sinergise, CC BY 4.0)"
     zoom:
       min: 8
-      max: 14          # roads need higher zoom than broad snow polygons
+      max: 12         # roads need higher zoom than broad snow polygons
     style:
       highway_types:
         - path

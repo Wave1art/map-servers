@@ -218,6 +218,14 @@
 // ── Base layer definitions ─────────────────────────────────────────────────
 const BASE_LAYERS = [
   {
+    id:    "swisstopo-grey",
+    name:  "Swiss Grey",
+    layer: L.tileLayer("tiles/swisstopo-grey/{z}/{x}/{y}.jpeg", {
+      attribution: "© swisstopo",
+      maxZoom: 16,
+    }),
+  },
+  {
     id:    "topo",
     name:  "Topo",
     layer: L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {

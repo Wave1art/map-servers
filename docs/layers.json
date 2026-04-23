@@ -1,49 +1,6 @@
 {
   "layers": [
     {
-      "id": "slf-snow-depth",
-      "name": "Snow Depth (HS 1-day)",
-      "description": "SLF daily gridded snow depth model (HS1D-v2). Updated at 06:00 UTC. Colour-coded by depth class; semi-transparent areas indicate partial cover.\n",
-      "tileUrl": "tiles/slf-snow-depth/{z}/{x}/{y}.png",
-      "attribution": "\u00a9 WSL Institute for Snow and Avalanche Research SLF (www.slf.ch)",
-      "legend": [
-        {
-          "label": "1\u201320 cm",
-          "color": "#CDFFCD"
-        },
-        {
-          "label": "20\u201350 cm",
-          "color": "#99F0B2"
-        },
-        {
-          "label": "50\u201380 cm",
-          "color": "#53BD9F"
-        },
-        {
-          "label": "80\u2013120 cm",
-          "color": "#3296B4"
-        },
-        {
-          "label": "120\u2013200 cm",
-          "color": "#0670B0"
-        },
-        {
-          "label": "200\u2013300 cm",
-          "color": "#054F8C"
-        },
-        {
-          "label": "> 300 cm",
-          "color": "#610432"
-        }
-      ],
-      "zoom": {
-        "min": 5,
-        "max": 10
-      },
-      "validAt": "2026-04-19T06:00:00Z",
-      "builtAt": "2026-04-19T20:25:21.684644+00:00"
-    },
-    {
       "id": "slope-30",
       "name": "Slope \u2265 30\u00b0 (Avalanche terrain)",
       "description": "Terrain steeper than 30\u00b0 \u2014 key context layer for avalanche risk. Source: swisstopo digital terrain model.\n",
@@ -109,6 +66,49 @@
       },
       "validAt": null,
       "builtAt": "2026-04-19T23:51:25.525503+00:00"
+    },
+    {
+      "id": "slf-snow-depth",
+      "name": "Snow Depth (HS 1-day)",
+      "description": "SLF daily gridded snow depth model (HS1D-v2). Updated at 06:00 UTC. Colour-coded by depth class; semi-transparent areas indicate partial cover.\n",
+      "tileUrl": "tiles/slf-snow-depth/{z}/{x}/{y}.png",
+      "attribution": "\u00a9 WSL Institute for Snow and Avalanche Research SLF (www.slf.ch)",
+      "legend": [
+        {
+          "label": "1\u201320 cm",
+          "color": "#CDFFCD"
+        },
+        {
+          "label": "20\u201350 cm",
+          "color": "#99F0B2"
+        },
+        {
+          "label": "50\u201380 cm",
+          "color": "#53BD9F"
+        },
+        {
+          "label": "80\u2013120 cm",
+          "color": "#3296B4"
+        },
+        {
+          "label": "120\u2013200 cm",
+          "color": "#0670B0"
+        },
+        {
+          "label": "200\u2013300 cm",
+          "color": "#054F8C"
+        },
+        {
+          "label": "> 300 cm",
+          "color": "#610432"
+        }
+      ],
+      "zoom": {
+        "min": 5,
+        "max": 10
+      },
+      "validAt": "2026-04-19T06:00:00Z",
+      "builtAt": "2026-04-19T23:59:21.383238+00:00"
     }
   ]
 }
