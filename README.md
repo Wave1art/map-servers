@@ -14,12 +14,12 @@ Tile sets are rebuilt daily by a GitHub Actions workflow and committed back to t
 
 Tile URL pattern:
 ```
-https://<your-username>.github.io/slf-snow-tiles/tiles/<layer-id>/{z}/{x}/{y}.png
+https://Wave1art.github.io/map-servers/tiles/<layer-id>/{z}/{x}/{y}.png
 ```
 
 A visual preview map with layer switcher, opacity control, and click-to-copy tile URLs is available at:
 ```
-https://<your-username>.github.io/slf-snow-tiles/
+https://Wave1art.github.io/map-servers/
 ```
 
 ## Prerequisites

@@ -67,20 +67,6 @@ layers:
 
   # ── swisstopo: slope ≥ 30° ───────────────────────────────────────────────────
   # Static terrain data — run once manually, no need to refresh.
-  - id: swisstopo-grey
-    name: Swiss Topo (Grey)
-    description: >
-      Official swisstopo grayscale map (Pixelkarte-Grau).
-    type: wmts
-    url: "https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.pixelkarte-grau/default/current/3857/{z}/{x}/{y}.jpeg"
-    schedule: null
-    attribution: "© swisstopo"
-    zoom:
-      min: 5
-      max: 12
-
-  # ── swisstopo: slope ≥ 30° ───────────────────────────────────────────────────
-  # Static terrain data — run once manually, no need to refresh.
   - id: slope-30
     name: Slope ≥ 30° (Avalanche terrain)
     description: >

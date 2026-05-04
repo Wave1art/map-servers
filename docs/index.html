@@ -218,9 +218,17 @@
 // ── Base layer definitions ─────────────────────────────────────────────────
 const BASE_LAYERS = [
   {
+    id:    "swisstopo",
+    name:  "Swiss Topo",
+    layer: L.tileLayer("https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.pixelkarte-farbe/default/current/3857/{z}/{x}/{y}.jpeg", {
+      attribution: "© swisstopo",
+      maxZoom: 16,
+    }),
+  },
+  {
     id:    "swisstopo-grey",
     name:  "Swiss Grey",
-    layer: L.tileLayer("tiles/swisstopo-grey/{z}/{x}/{y}.jpeg", {
+    layer: L.tileLayer("https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.pixelkarte-grau/default/current/3857/{z}/{x}/{y}.jpeg", {
       attribution: "© swisstopo",
       maxZoom: 16,
     }),
