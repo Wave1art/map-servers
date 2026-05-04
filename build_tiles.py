@@ -35,6 +35,8 @@ import math
 import sqlite3
 import sys
 import time
+
+sys.stdout.reconfigure(line_buffering=True)
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -556,26 +558,30 @@ def build_road_gradient_layer(
     polygon = layer.get("polygon")
     filter_desc = "poly filter" if polygon else "bbox"
     print(f"  Fetching roads from Overpass ({len(highway_types)} highway types, {filter_desc})…")
+    t0 = time.perf_counter()
     osm_data = fetch_roads(bounds, highway_types, s, polygon=polygon, dry_run=dry_run)
     ways = parse_osm(osm_data)
-    print(f"  {len(ways)} ways parsed")
+    print(f"  {len(ways)} ways parsed  ({time.perf_counter() - t0:.1f}s)")
 
     # ── 2. Sample elevation and compute gradients ────────────────────────────
     print(f"  Sampling Copernicus GLO-30 DEM and computing gradients "
           f"(max segment {max_seg_m:.0f} m)…")
+    t0 = time.perf_counter()
     sampler = DEMSampler()
     try:
         features = compute_gradients(ways, sampler, max_seg_m, bands)
     finally:
         sampler.close()
-    print(f"  {len(features)} gradient segments ready")
+    print(f"  {len(features)} gradient segments ready  ({time.perf_counter() - t0:.1f}s)")
 
     if not features:
         print("  ⚠  No features — skipping tile render")
         return {"validAt": None, "rendered": 0}
 
     # ── 3. Build spatial index once for all zoom levels ──────────────────────
+    t0 = time.perf_counter()
     tree = STRtree([f["geom"] for f in features])
+    print(f"  Spatial index built  ({time.perf_counter() - t0:.1f}s)")
 
     # ── 4. Render tiles ──────────────────────────────────────────────────────
     mbtiles_tiles  = []
@@ -587,6 +593,7 @@ def build_road_gradient_layer(
         line_width = max(1, line_width_base + (z - 10))
         candidates = list(mercantile.tiles(*bounds, zooms=z))
         rendered   = 0
+        t0 = time.perf_counter()
         for tile in candidates:
             png = render_road_gradient_tile(
                 features, tree, tile.z, tile.x, tile.y, line_width
@@ -599,7 +606,8 @@ def build_road_gradient_layer(
         empty = len(candidates) - rendered
         total_rendered += rendered
         print(f"    z{z:>2}  {len(candidates):>5} candidates  "
-              f"{rendered:>4} rendered  {empty:>4} empty")
+              f"{rendered:>4} rendered  {empty:>4} empty  "
+              f"({time.perf_counter() - t0:.1f}s)")
 
     if also_mbtiles and mbtiles_tiles:
         mb_path = out_dir.parent / f"{layer['id']}.mbtiles"

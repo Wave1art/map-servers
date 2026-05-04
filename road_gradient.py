@@ -18,6 +18,7 @@ geodesic distance (pyproj.Geod), staying entirely in WGS84 throughout.
 
 import math
 import os
+import time
 from typing import Optional
 
 # ── Tell GDAL to use an in-memory HTTP cache for COG block reads.
@@ -111,7 +112,7 @@ def fetch_roads(
         for hw in highway_types
     )
     query = (
-        f"[out:json][timeout:300][maxsize:536870912];\n"
+        f"[out:json][timeout:120][maxsize:536870912];\n"
         f"(\n"
         f"{way_filters}\n"
         f");\n"
@@ -137,10 +138,13 @@ def fetch_roads(
     for url in OVERPASS_URLS:
         for method in ("POST", "GET"):
             try:
+                print(f"  → Overpass {method} {url} …", flush=True)
+                t0 = time.perf_counter()
                 if method == "POST":
                     resp = session.post(url, data={"data": query}, headers=overpass_headers, timeout=(10, 360))
                 else:
                     resp = session.get(url, params={"data": query}, headers=overpass_headers, timeout=(10, 360))
+                elapsed = time.perf_counter() - t0
                 if resp.status_code == 406:
                     if method == "POST":
                         print(f"  ↷ {url} POST→406, retrying as GET…")
@@ -157,6 +161,8 @@ def fetch_roads(
                 data = resp.json()
                 if remark := data.get("remark"):
                     print(f"  ⚠  Overpass: {remark}")
+                n_elements = len(data.get("elements", []))
+                print(f"  ✓ Overpass {method} {url}  ({n_elements} elements, {len(resp.content)//1024} KB, {elapsed:.1f}s)")
                 return data
             except requests.exceptions.RequestException as exc:
                 print(f"  ↷ {url} {method} failed ({exc}), trying next…")
@@ -298,12 +304,14 @@ class DEMSampler:
             return self._cache[key]
         import rasterio
         url = self._tile_url(key)
+        print(f"    → opening DEM tile {key} …", flush=True)
+        t0 = time.perf_counter()
         try:
             ds = rasterio.open(url)
             self._cache[key] = ds
-            print(f"    ✓ DEM tile opened: {key}")
+            print(f"    ✓ DEM tile opened: {key}  ({time.perf_counter() - t0:.1f}s)")
         except Exception as exc:
-            print(f"    ✗ DEM tile {key} failed to open:\n"
+            print(f"    ✗ DEM tile {key} failed ({time.perf_counter() - t0:.1f}s):\n"
                   f"      URL: {url}\n"
                   f"      Error: {type(exc).__name__}: {exc}")
             self._cache[key] = None   # mark unavailable so we don't retry
@@ -321,8 +329,12 @@ class DEMSampler:
             import rasterio.windows
             row, col = ds.index(lon, lat)
             window   = rasterio.windows.Window(col, row, 1, 1)
-            data     = ds.read(1, window=window)
-            val      = float(data[0, 0])
+            t0   = time.perf_counter()
+            data = ds.read(1, window=window)
+            elapsed = time.perf_counter() - t0
+            if elapsed > 2.0:
+                print(f"    ⚠  slow DEM read at ({lon:.4f}, {lat:.4f}) key={key}: {elapsed:.1f}s", flush=True)
+            val = float(data[0, 0])
             if ds.nodata is not None and abs(val - ds.nodata) < 1:
                 return None
             return val
@@ -386,8 +398,11 @@ def compute_gradients(
 
     features: list[dict] = []
     missing_elev = 0
+    n_ways = len(ways)
 
-    for way in ways:
+    for i, way in enumerate(ways):
+        if i > 0 and i % 100 == 0:
+            print(f"    … {i}/{n_ways} ways processed, {len(features)} segments so far", flush=True)
         for seg_coords, seg_len_m in _split_way(way["coords"], max_len_m):
             if seg_len_m < 5.0:
                 # Too short to derive a meaningful gradient — skip
