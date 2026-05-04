@@ -341,6 +341,80 @@ class DEMSampler:
         except Exception:
             return None
 
+    def batch_sample(
+        self, coords: list[tuple[float, float]]
+    ) -> dict[tuple[float, float], Optional[float]]:
+        """
+        Sample elevations for many coordinates at once.
+
+        Groups points by 1°×1° DEM tile, reads one numpy window per tile that
+        covers all points in that tile, then looks up each point by array index.
+        Far fewer S3 round-trips than calling get_elevation() in a loop.
+        """
+        import numpy as np
+        import rasterio.windows
+
+        # Group by tile key, preserving order for index mapping
+        by_tile: dict[str, list[tuple[float, float]]] = {}
+        for coord in coords:
+            key = self._tile_key(*coord)
+            by_tile.setdefault(key, []).append(coord)
+
+        results: dict[tuple[float, float], Optional[float]] = {}
+
+        for key, pts in by_tile.items():
+            ds = self._open(key)
+            if ds is None:
+                for pt in pts:
+                    results[pt] = None
+                continue
+
+            height, width = ds.height, ds.width
+            nodata = ds.nodata
+
+            # Convert lon/lat → pixel indices, clamping to dataset bounds
+            rows, cols = [], []
+            bad: set[int] = set()
+            for i, (lon, lat) in enumerate(pts):
+                try:
+                    r, c = ds.index(lon, lat)
+                    rows.append(max(0, min(int(r), height - 1)))
+                    cols.append(max(0, min(int(c), width  - 1)))
+                except Exception:
+                    rows.append(0); cols.append(0); bad.add(i)
+
+            min_r, max_r = min(rows), max(rows)
+            min_c, max_c = min(cols), max(cols)
+
+            window = rasterio.windows.Window(
+                min_c, min_r, max_c - min_c + 1, max_r - min_r + 1
+            )
+            t0 = time.perf_counter()
+            try:
+                data = ds.read(1, window=window)
+            except Exception as exc:
+                print(f"    ✗ DEM batch read failed for {key}: {exc}")
+                for pt in pts:
+                    results[pt] = None
+                continue
+            elapsed = time.perf_counter() - t0
+            if elapsed > 1.0:
+                print(f"    ⚠  slow DEM read {key} "
+                      f"({len(pts)} pts, {window.width}×{window.height}px): "
+                      f"{elapsed:.1f}s", flush=True)
+
+            for i, pt in enumerate(pts):
+                if i in bad:
+                    results[pt] = None
+                    continue
+                val = float(data[rows[i] - min_r, cols[i] - min_c])
+                if nodata is not None and abs(val - nodata) < 1:
+                    results[pt] = None
+                else:
+                    results[pt] = val
+
+        return results
+
     def close(self) -> None:
         for ds in self._cache.values():
             if ds is not None:
@@ -396,41 +470,50 @@ def compute_gradients(
     if bands is None:
         bands = DEFAULT_BANDS
 
-    features: list[dict] = []
-    missing_elev = 0
-    n_ways = len(ways)
+    # ── Pass 1: split ways into segments, collect unique endpoint coords ──────
+    all_segments: list[tuple] = []   # (seg_coords, seg_len_m, highway, name)
+    unique_coords: set[tuple[float, float]] = set()
 
-    for i, way in enumerate(ways):
-        if i > 0 and i % 100 == 0:
-            print(f"    … {i}/{n_ways} ways processed, {len(features)} segments so far", flush=True)
+    for way in ways:
         for seg_coords, seg_len_m in _split_way(way["coords"], max_len_m):
             if seg_len_m < 5.0:
-                # Too short to derive a meaningful gradient — skip
                 continue
+            all_segments.append((seg_coords, seg_len_m, way["highway"], way["name"]))
+            unique_coords.add(seg_coords[0])
+            unique_coords.add(seg_coords[-1])
 
-            elev_start = sampler.get_elevation(*seg_coords[0])
-            elev_end   = sampler.get_elevation(*seg_coords[-1])
+    print(f"    {len(all_segments)} segments from {len(ways)} ways, "
+          f"{len(unique_coords)} unique elevation lookups", flush=True)
 
-            if elev_start is None or elev_end is None:
-                missing_elev += 1
-                gradient_pct  = 0.0          # render as flat; no data
-            else:
-                gradient_pct = abs(elev_end - elev_start) / seg_len_m * 100.0
+    # ── Pass 2: batch-sample all elevations (one S3 read per DEM tile) ───────
+    elev = sampler.batch_sample(list(unique_coords))
 
-            color_hex = gradient_color(gradient_pct, bands)
-            features.append({
-                "geom":         LineString(seg_coords),
-                "gradient_pct": gradient_pct,
-                "color_hex":    color_hex,
-                "color_rgba":   _hex_to_rgba(color_hex, line_alpha),
-                "highway":      way["highway"],
-                "name":         way["name"],
-            })
+    # ── Pass 3: compute gradients and build features ──────────────────────────
+    features: list[dict] = []
+    missing_elev = 0
+
+    for seg_coords, seg_len_m, highway, name in all_segments:
+        elev_start = elev.get(seg_coords[0])
+        elev_end   = elev.get(seg_coords[-1])
+
+        if elev_start is None or elev_end is None:
+            missing_elev += 1
+            gradient_pct  = 0.0
+        else:
+            gradient_pct = abs(elev_end - elev_start) / seg_len_m * 100.0
+
+        color_hex = gradient_color(gradient_pct, bands)
+        features.append({
+            "geom":         LineString(seg_coords),
+            "gradient_pct": gradient_pct,
+            "color_hex":    color_hex,
+            "color_rgba":   _hex_to_rgba(color_hex, line_alpha),
+            "highway":      highway,
+            "name":         name,
+        })
 
     if missing_elev:
-        print(
-            f"    ⚠  {missing_elev} segment(s) had no DEM coverage "
-            f"and are shown as flat (0 %)."
-        )
+        print(f"    ⚠  {missing_elev} segment(s) had no DEM coverage "
+              f"and are shown as flat (0 %).")
 
     return features

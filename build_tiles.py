@@ -32,14 +32,18 @@ Dependencies:
 import argparse
 import json
 import math
+import os
 import sqlite3
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 sys.stdout.reconfigure(line_buffering=True)
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
+
+_RENDER_WORKERS = min(os.cpu_count() or 4, 16)
 
 try:
     import mercantile
@@ -434,19 +438,26 @@ def build_geojson_layer(
 
     for z in range(z_min, z_max + 1):
         candidates = list(mercantile.tiles(*bounds, zooms=z))
-        rendered   = 0
-        for tile in candidates:
-            png = render_geojson_tile(features, tile.z, tile.x, tile.y)
-            if png:
-                write_xyz_tile(out_dir, tile.z, tile.x, tile.y, png)
-                if also_mbtiles:
-                    mbtiles_tiles.append((tile.z, tile.x, tile.y, png))
-                rendered += 1
+        t0 = time.perf_counter()
+        rendered = 0
+
+        def _render_geojson(tile, _f=features):
+            return tile, render_geojson_tile(_f, tile.z, tile.x, tile.y)
+
+        with ThreadPoolExecutor(max_workers=_RENDER_WORKERS) as pool:
+            for tile, png in pool.map(_render_geojson, candidates):
+                if png:
+                    write_xyz_tile(out_dir, tile.z, tile.x, tile.y, png)
+                    if also_mbtiles:
+                        mbtiles_tiles.append((tile.z, tile.x, tile.y, png))
+                    rendered += 1
+
         empty = len(candidates) - rendered
         total_rendered += rendered
         total_empty    += empty
         print(f"    z{z:>2}  {len(candidates):>5} candidates  "
-              f"{rendered:>4} rendered  {empty:>4} empty")
+              f"{rendered:>4} rendered  {empty:>4} empty  "
+              f"({time.perf_counter() - t0:.1f}s)")
 
     if also_mbtiles:
         mb_path = out_dir.parent / f"{layer['id']}.mbtiles"
@@ -594,15 +605,18 @@ def build_road_gradient_layer(
         candidates = list(mercantile.tiles(*bounds, zooms=z))
         rendered   = 0
         t0 = time.perf_counter()
-        for tile in candidates:
-            png = render_road_gradient_tile(
-                features, tree, tile.z, tile.x, tile.y, line_width
-            )
-            if png:
-                write_xyz_tile(out_dir, tile.z, tile.x, tile.y, png)
-                if also_mbtiles:
-                    mbtiles_tiles.append((tile.z, tile.x, tile.y, png))
-                rendered += 1
+
+        def _render_rg(tile, _lw=line_width, _f=features, _t=tree):
+            return tile, render_road_gradient_tile(_f, _t, tile.z, tile.x, tile.y, _lw)
+
+        with ThreadPoolExecutor(max_workers=_RENDER_WORKERS) as pool:
+            for tile, png in pool.map(_render_rg, candidates):
+                if png:
+                    write_xyz_tile(out_dir, tile.z, tile.x, tile.y, png)
+                    if also_mbtiles:
+                        mbtiles_tiles.append((tile.z, tile.x, tile.y, png))
+                    rendered += 1
+
         empty = len(candidates) - rendered
         total_rendered += rendered
         print(f"    z{z:>2}  {len(candidates):>5} candidates  "
