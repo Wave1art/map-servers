@@ -112,7 +112,7 @@ def fetch_roads(
         for hw in highway_types
     )
     query = (
-        f"[out:json][timeout:120][maxsize:536870912];\n"
+        f"[out:json][timeout:300][maxsize:536870912];\n"
         f"(\n"
         f"{way_filters}\n"
         f");\n"
@@ -161,6 +161,10 @@ def fetch_roads(
                 data = resp.json()
                 if remark := data.get("remark"):
                     print(f"  ⚠  Overpass: {remark}")
+                    if "timed out" in remark or "runtime error" in remark:
+                        print(f"  ↷ {url} query timed out, trying next…")
+                        last_exc = RuntimeError(f"Overpass timeout: {remark}")
+                        break
                 n_elements = len(data.get("elements", []))
                 print(f"  ✓ Overpass {method} {url}  ({n_elements} elements, {len(resp.content)//1024} KB, {elapsed:.1f}s)")
                 return data
