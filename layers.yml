@@ -112,7 +112,7 @@ layers:
     attribution: "© OpenStreetMap contributors (ODbL) | © Copernicus DEM (ESA/Sinergise, CC BY 4.0)"
     zoom:
       min: 8
-      max: 14         # roads need higher zoom than broad snow polygons
+      max: 13         # roads need higher zoom than broad snow polygons
     style:
       highway_types:
         - path
