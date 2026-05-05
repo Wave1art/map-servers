@@ -47,11 +47,25 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen   # --frozen ensures pyproject.toml is the source of truth, not a lockfile drift
 
+      - name: Set Geofabrik cache key
+        run: echo "GEOFABRIK_WEEK=$(date -u +%Y-W%V)" >> $GITHUB_ENV
+
+      - name: Cache Geofabrik PBF extracts
+        uses: actions/cache@v4
+        with:
+          path: /tmp/geofabrik-cache
+          # Weekly key — roads change slowly; refresh once a week is plenty.
+          key: geofabrik-${{ runner.os }}-${{ env.GEOFABRIK_WEEK }}
+          restore-keys: |
+            geofabrik-${{ runner.os }}-
+
       - name: Build tiles
         # Individual layer fetch failures (e.g. source server blocking CI IPs)
         # are handled gracefully in build_tiles.py — the step only exits non-zero
         # if every single layer fails. Partial success commits whatever built.
         timeout-minutes: 45
+        env:
+          OSM_PBF_CACHE_DIR: /tmp/geofabrik-cache
         run: |
           ARGS=""
           [ -n "${{ github.event.inputs.layer_id }}"  ] && ARGS="$ARGS --layer ${{ github.event.inputs.layer_id }}"

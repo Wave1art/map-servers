@@ -540,7 +540,7 @@ def build_road_gradient_layer(
     try:
         from road_gradient import (
             DEFAULT_BANDS, DEFAULT_HIGHWAY_TYPES,
-            DEMSampler, compute_gradients, fetch_roads, parse_osm,
+            DEMSampler, compute_gradients, fetch_roads, fetch_roads_geofabrik, parse_osm,
         )
     except ImportError as e:
         raise ImportError(
@@ -566,13 +566,27 @@ def build_road_gradient_layer(
     z_max = zoom_max if zoom_max is not None else layer["zoom"]["max"]
 
     # ── 1. Fetch road network ────────────────────────────────────────────────
-    polygon = layer.get("polygon")
-    filter_desc = "poly filter" if polygon else "bbox"
-    print(f"  Fetching roads from Overpass ({len(highway_types)} highway types, {filter_desc})…")
+    geofabrik_region = layer.get("geofabrik")
     t0 = time.perf_counter()
-    osm_data = fetch_roads(bounds, highway_types, s, polygon=polygon, dry_run=dry_run)
-    ways = parse_osm(osm_data)
-    print(f"  {len(ways)} ways parsed  ({time.perf_counter() - t0:.1f}s)")
+    if geofabrik_region:
+        cache_dir  = os.environ.get("OSM_PBF_CACHE_DIR")
+        cache_path = (
+            os.path.join(cache_dir, f"{geofabrik_region.replace('/', '_')}-latest.osm.pbf")
+            if cache_dir else None
+        )
+        print(f"  Fetching roads from Geofabrik "
+              f"({len(highway_types)} highway types, region={geofabrik_region})…")
+        ways = fetch_roads_geofabrik(
+            geofabrik_region, highway_types,
+            bounds=tuple(bounds), cache_path=cache_path, session=s,
+        )
+    else:
+        polygon = layer.get("polygon")
+        filter_desc = "poly filter" if polygon else "bbox"
+        print(f"  Fetching roads from Overpass ({len(highway_types)} highway types, {filter_desc})…")
+        osm_data = fetch_roads(bounds, highway_types, s, polygon=polygon, dry_run=dry_run)
+        ways = parse_osm(osm_data)
+    print(f"  {len(ways)} ways fetched  ({time.perf_counter() - t0:.1f}s)")
 
     # ── 2. Sample elevation and compute gradients ────────────────────────────
     print(f"  Sampling Copernicus GLO-30 DEM and computing gradients "

@@ -35,6 +35,9 @@ import requests
 # ── Geodesic calculator (WGS84 ellipsoid) ─────────────────────────────────────
 GEOD = Geod(ellps="WGS84")
 
+# ── Geofabrik base URL ────────────────────────────────────────────────────────
+_GEOFABRIK_BASE = "https://download.geofabrik.de"
+
 # ── Overpass endpoints (tried in order; first 200 response wins) ──────────────
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -207,6 +210,138 @@ def parse_osm(data: dict) -> list[dict]:
             "surface": tags.get("surface", ""),
         })
     return ways
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Geofabrik PBF download + osmium extraction
+# ─────────────────────────────────────────────────────────────────────────────
+
+def download_geofabrik_pbf(
+    region: str,
+    cache_path: str | None = None,
+    session: requests.Session | None = None,
+) -> str:
+    """
+    Download a Geofabrik regional PBF extract and return the local file path.
+
+    region      = Geofabrik path suffix, e.g. "europe/switzerland"
+    cache_path  = if given and the file already exists, skip downloading
+    """
+    url = f"{_GEOFABRIK_BASE}/{region}-latest.osm.pbf"
+
+    if cache_path and os.path.exists(cache_path):
+        size_mb = os.path.getsize(cache_path) / 1024 / 1024
+        print(f"  → Using cached PBF: {cache_path} ({size_mb:.0f} MB)", flush=True)
+        return cache_path
+
+    dest = cache_path or f"/tmp/{region.replace('/', '_')}-latest.osm.pbf"
+    os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
+
+    print(f"  → Downloading {url} …", flush=True)
+    t0 = time.perf_counter()
+    sess = session or requests.Session()
+    with sess.get(url, stream=True, timeout=(30, 600)) as r:
+        r.raise_for_status()
+        total = int(r.headers.get("content-length", 0))
+        downloaded = 0
+        with open(dest, "wb") as f:
+            for chunk in r.iter_content(chunk_size=4 * 1024 * 1024):
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total:
+                    print(
+                        f"\r    {downloaded / total * 100:.0f}%  "
+                        f"({downloaded // 1024 // 1024} / {total // 1024 // 1024} MB)",
+                        end="", flush=True,
+                    )
+    print(f"\n  ✓ {downloaded // 1024 // 1024} MB downloaded "
+          f"in {time.perf_counter() - t0:.1f}s", flush=True)
+    return dest
+
+
+class _WayExtractor:
+    """osmium handler that extracts MTB-relevant ways with node coordinates."""
+
+    SKIP_ACCESS  = {"private", "no"}
+    SKIP_BICYCLE = {"private", "no", "dismount"}
+
+    def __init__(
+        self,
+        highway_types: set[str],
+        bounds: tuple[float, float, float, float] | None,
+    ) -> None:
+        self._highway_types = highway_types
+        self._bounds = bounds
+        self.ways: list[dict] = []
+
+    def way(self, w) -> None:
+        hw = w.tags.get("highway", "")
+        if hw not in self._highway_types:
+            return
+        if w.tags.get("access") in self.SKIP_ACCESS:
+            return
+        if w.tags.get("bicycle") in self.SKIP_BICYCLE:
+            return
+
+        coords = [
+            (n.location.lon, n.location.lat)
+            for n in w.nodes
+            if n.location.valid()
+        ]
+        if len(coords) < 2:
+            return
+
+        if self._bounds:
+            west, south, east, north = self._bounds
+            if not any(west <= lon <= east and south <= lat <= north for lon, lat in coords):
+                return
+
+        self.ways.append({
+            "coords":  coords,
+            "highway": hw,
+            "name":    w.tags.get("name", ""),
+            "surface": w.tags.get("surface", ""),
+        })
+
+
+def fetch_roads_geofabrik(
+    region: str,
+    highway_types: list[str],
+    bounds: tuple[float, float, float, float] | None = None,
+    cache_path: str | None = None,
+    session: requests.Session | None = None,
+) -> list[dict]:
+    """
+    Download a Geofabrik PBF and extract MTB-relevant ways with osmium.
+
+    Returns the same list-of-way-dicts format as parse_osm():
+        [{"coords": [(lon, lat), ...], "highway": str, "name": str, "surface": str}, ...]
+    """
+    try:
+        import osmium
+    except ImportError:
+        raise ImportError(
+            "osmium (pyosmium) is required for Geofabrik extraction. "
+            "Run: uv add osmium"
+        )
+
+    pbf_path = download_geofabrik_pbf(region, cache_path=cache_path, session=session)
+
+    print(f"  → Extracting ways from PBF …", flush=True)
+    t0 = time.perf_counter()
+    extractor = _WayExtractor(set(highway_types), bounds)
+
+    # Wrap in an osmium.SimpleHandler so apply_file works with locations=True
+    class _Handler(osmium.SimpleHandler):
+        def way(self, w):
+            extractor.way(w)
+
+    handler = _Handler()
+    handler.apply_file(pbf_path, locations=True)
+
+    print(f"  ✓ {len(extractor.ways)} ways extracted in "
+          f"{time.perf_counter() - t0:.1f}s", flush=True)
+    return extractor.ways
 
 
 # ─────────────────────────────────────────────────────────────────────────────

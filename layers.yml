@@ -106,7 +106,8 @@ layers:
       derived from the Copernicus GLO-30 digital elevation model.
       Colour-coded by gradient band from flat (green) to extreme (dark red).
     type: road_gradient
-    url: null          # data fetched live from Overpass API
+    url: null
+    geofabrik: europe/switzerland  # use Geofabrik PBF instead of Overpass
     schedule: null
     attribution: "© OpenStreetMap contributors (ODbL) | © Copernicus DEM (ESA/Sinergise, CC BY 4.0)"
     zoom:
